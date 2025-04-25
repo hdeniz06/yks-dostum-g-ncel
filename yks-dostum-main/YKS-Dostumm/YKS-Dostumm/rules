@@ -1,0 +1,146 @@
+
+Windsurf iOS Project Guidelines
+
+You are an expert iOS developer using Swift, SwiftUI, MVVM architecture, and Supabase for backend integration. Follow the principles below to maintain code quality, scalability, and Apple-native user experience.
+
+⸻
+
+🧠 Project Philosophy
+    •    This is a Turkish-language mobile app built for students preparing for the YKS exam.
+    •    UI should strictly follow Apple’s Human Interface Guidelines.
+    •    The project is written in Swift + SwiftUI, using MVVM for scalable architecture.
+    •    Backend is handled via Supabase.
+    •    Final product language: Turkish
+    •    Document language: English (for AI understanding)
+
+⸻
+
+🏗️ Code Style and Structure
+    •    Prefer structs over classes.
+    •    Use let whenever possible instead of var.
+    •    Follow MVVM:
+    •    View: SwiftUI Views
+    •    ViewModel: ObservableObject with @Published
+    •    Model: Clean, Codable structs
+        Each Feature folder may contain: View, ViewModel, Model, Utils.
+
+⸻
+
+🧾 Naming Conventions
+    •    camelCase for variables/functions → userName, fetchTasks()
+    •    PascalCase for types → HomeView, UserModel
+    •    Boolean names start with is or has → isCompleted, hasPermission
+    •    Views end with View, ViewModels end with ViewModel
+    •    Use Turkish names in UI, English names in codebase.
+
+⸻
+
+✅ Swift Best Practices
+    •    Use Swift Concurrency (async/await) for networking.
+    •    Use Result for error handling when necessary.
+    •    Avoid force unwrapping and use optional chaining and guard statements.
+    •    Avoid logic in Views, push all logic to ViewModels.
+    •    Leverage @StateObject, @ObservedObject, @EnvironmentObject for state.
+    •    Use Protocol-Oriented Programming where applicable.
+
+⸻
+
+🎨 UI and Styling
+    •    Use SwiftUI for all screens. UIKit only if absolutely necessary.
+    •    Use SF Symbols for icons and Drawer menu items.
+    •    Support Dark Mode and Dynamic Type.
+    •    Design with SafeArea and GeometryReader properly.
+    •    Avoid hardcoded paddings, use responsive layouts with GeometryProxy.
+    •    Use linear/radial gradients sparingly but aesthetically.
+    •    Use .sheet, .popover, and NavigationStack for user flow.
+
+⸻
+
+📊 Screens & Navigation
+
+Main Screen
+    •    Top: “Hoş geldin, [İsim]” with profile photo/Bitmoji
+    •    Middle: To-Do List fed from task model
+    •    Bottom: Chatbot powered by AI
+
+Drawer Menu (Left Slide)
+    •    Header: User Info (name + Bitmoji)
+    •    Items (with SF Symbols):
+    •    Yapılacaklar
+    •    Biriken Sorular
+    •    Yapay Zeka
+    •    Sayaç
+    •    YKS İstatistiğim
+    •    Deneme Sonuçları
+    •    Yakınımdaki Kütüphaneler
+    •    Rozetler
+    •    Hedeflerim
+    •    Profil
+    •    Ayarlar
+
+⸻
+
+📱 Responsive Design
+    •    Use GeometryReader carefully. Avoid broken UIs and large blank spaces.
+    •    Test UI in Xcode Previews and multiple devices.
+    •    Use ScrollView where appropriate to handle smaller screen sizes.
+    •    Respect Safe Areas on all screens.
+
+⸻
+
+⚙️ Performance and Optimization
+    •    Use .lazy views (LazyVStack, LazyHStack) for large content.
+    •    Memoize views with @ViewBuilder and @MainActor.
+    •    Limit use of onAppear, onChange, Task {} in views.
+    •    Use async image loading when adding user photos.
+    •    Optimize for launch speed and minimize main thread tasks.
+
+⸻
+
+🔒 Security and Data
+    •    Store preferences in UserDefaults for non-sensitive data.
+    •    Use Supabase authentication with secure tokens.
+    •    Validate all user inputs.
+    •    Use HTTPS endpoints only.
+    •    No sensitive data should be stored unencrypted on-device.
+
+⸻
+
+🔬 Development Workflow
+    •    Use SwiftUI preview providers for design iteration.
+    •    Follow Apple’s design kits and iOS Human Interface Guidelines.
+    •    Modularize code for testability and reusability.
+    •    Write clear, maintainable code. Comments only when absolutely necessary.
+
+⸻
+
+📦 Package Management
+    •    Use Swift Package Manager.
+    •    Approved libraries:
+    •    Supabase Swift SDK
+    •    Kingfisher (for image loading if needed)
+    •    Lottie (optional, for animations)
+
+⸻
+
+🔍 Testing (Optional but Recommended)
+    •    Use XCTest for unit testing ViewModels
+    •    Snapshot testing for Views
+    •    Test async logic with XCTestExpectation
+
+⸻
+
+📘 Localization (i18n)
+    •    Use Localizable.strings for Turkish content.
+    •    All UI strings must be localizable.
+    •    Support future expansion to multiple languages.
+
+⸻
+
+🧩 Key Rules Summary
+    1.    MVVM structure, no business logic in views.
+    2.    Only Turkish in UI, English in code.
+    3.    GeometryReader and SafeArea must be respected.
+    4.    Use Apple-first design with minimalistic gradients.
+    5.    Everything is SwiftUI unless impossible.
+    6.    Modular, readable, tested code always wins.
