@@ -1,10 +1,14 @@
 import SwiftUI
+import PhotosUI
 
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @State private var showingProfileEdit = false
     @State private var tempName = ""
     @State private var tempEmail = ""
+    @State private var showingImagePicker = false
+    @State private var pickedImage: UIImage? = nil
+    @State private var showingPhotoOptions = false
     
     var body: some View {
         ScrollView {
@@ -18,38 +22,45 @@ struct SettingsView: View {
                                 .font(.headline)
                                 .foregroundColor(.secondary)
                         }
-                        
                         Spacer()
-                        
-                        Button(action: {
-                            tempName = viewModel.userName
-                            tempEmail = viewModel.userEmail
-                            showingProfileEdit = true
-                        }) {
-                            Text("Düzenle")
-                                .font(.subheadline)
-                                .foregroundColor(.blue)
-                        }
                     }
-                    
                     // Profile Content
                     HStack(spacing: 15) {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.blue)
-                        
+                        ZStack {
+                            if let data = viewModel.profileImageData, let uiImage = UIImage(data: data) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 60, height: 60)
+                                    .clipShape(Circle())
+                            } else {
+                                Image(systemName: "person.circle.fill")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 60, height: 60)
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        .onTapGesture {
+                            showingPhotoOptions = true
+                        }
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(viewModel.userName)
-                                .font(.title3)
-                                .fontWeight(.semibold)
-                            
+                            TextField("Ad Soyad", text: $tempName, onCommit: {
+                                viewModel.updateUserName(tempName)
+                            })
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                            .disableAutocorrection(true)
+                            .textInputAutocapitalization(.words)
+                            .onAppear {
+                                tempName = viewModel.userName
+                            }
                             if !viewModel.userEmail.isEmpty {
                                 Text(viewModel.userEmail)
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
                         }
-                        
                         Spacer()
                     }
                 }
@@ -248,21 +259,36 @@ struct SettingsView: View {
                     )
             }
         }
+        .confirmationDialog("Profil Fotoğrafı", isPresented: $showingPhotoOptions, titleVisibility: .visible) {
+            Button("Fotoğrafı Değiştir", role: .none) {
+                showingImagePicker = true
+            }
+            if viewModel.profileImageData != nil {
+                Button("Fotoğrafı Kaldır", role: .destructive) {
+                    viewModel.clearProfileImage()
+                }
+            }
+            Button("İptal", role: .cancel) {}
+        }
         .sheet(isPresented: $showingProfileEdit) {
             ProfileEditView(
-                name: $tempName,
                 email: $tempEmail,
                 onSave: {
-                    viewModel.updateUserName(tempName)
                     viewModel.updateUserEmail(tempEmail)
                 }
             )
+        }
+        .sheet(isPresented: $showingImagePicker) {
+            ProfileImagePicker(image: $pickedImage) { img in
+                if let data = img.jpegData(compressionQuality: 0.8) {
+                    viewModel.updateProfileImage(data)
+                }
+            }
         }
     }
 }
 
 struct ProfileEditView: View {
-    @Binding var name: String
     @Binding var email: String
     let onSave: () -> Void
     
@@ -272,7 +298,6 @@ struct ProfileEditView: View {
         NavigationView {
             Form {
                 Section(header: Text("Profil Bilgileri")) {
-                    TextField("Ad Soyad", text: $name)
                     TextField("E-posta", text: $email)
                         .keyboardType(.emailAddress)
                         .autocapitalization(.none)
@@ -288,6 +313,45 @@ struct ProfileEditView: View {
                     presentationMode.wrappedValue.dismiss()
                 }
             )
+        }
+    }
+}
+
+struct ProfileImagePicker: UIViewControllerRepresentable {
+    @Binding var image: UIImage?
+    var onImagePicked: (UIImage) -> Void
+    
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let parent: ProfileImagePicker
+        init(_ parent: ProfileImagePicker) {
+            self.parent = parent
+        }
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            guard let provider = results.first?.itemProvider, provider.canLoadObject(ofClass: UIImage.self) else { return }
+            provider.loadObject(ofClass: UIImage.self) { image, _ in
+                if let uiImage = image as? UIImage {
+                    DispatchQueue.main.async {
+                        self.parent.image = uiImage
+                        self.parent.onImagePicked(uiImage)
+                    }
+                }
+            }
         }
     }
 }

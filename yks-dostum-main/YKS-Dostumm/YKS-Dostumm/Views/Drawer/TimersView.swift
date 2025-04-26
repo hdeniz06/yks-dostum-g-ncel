@@ -1,224 +1,205 @@
 import SwiftUI
 
+enum TimerTab {
+    case pomodoro, countdown
+}
+
 struct TimersView: View {
     @ObservedObject var viewModel: TimersViewModel
-    @State private var selectedTab = 0
-    @State private var showingAddPomodoro = false
+    @State private var selectedTab: TimerTab = .pomodoro
     @State private var showingAddCountdown = false
+    @State private var showingAddPomodoro = false
+    @State private var examDate: Date = Calendar.current.date(from: DateComponents(year: 2025, month: 6, day: 7, hour: 10, minute: 0)) ?? Date()
     
     var body: some View {
         VStack(spacing: 0) {
-            // Üst Başlık ve Sekme Seçici
-            VStack(spacing: 0) {
-                Picker("Timer Tipi", selection: $selectedTab) {
-                    Text("Pomodoro").tag(0)
-                    Text("Geri Sayım").tag(1)
+            // Centered Custom Segmented Control
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                SegmentButton(title: "Pomodoro", isSelected: selectedTab == .pomodoro) {
+                    selectedTab = .pomodoro
                 }
-                .pickerStyle(SegmentedPickerStyle())
-                .padding()
+                Spacer(minLength: 0)
+                SegmentButton(title: "Sayaç", isSelected: selectedTab == .countdown) {
+                    selectedTab = .countdown
+                }
+                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(Color(UIColor.secondarySystemBackground))
-            
-            // İçerik
-            TabView(selection: $selectedTab) {
-                // Pomodoro Sekmesi
-                PomodoroTabView(viewModel: viewModel, showingAddPomodoro: $showingAddPomodoro)
-                    .tag(0)
-                
-                // Geri Sayım Sekmesi
-                CountdownTabView(viewModel: viewModel, showingAddCountdown: $showingAddCountdown)
-                    .tag(1)
+            // Content
+            ZStack(alignment: .bottomTrailing) {
+                ScrollView {
+                    if selectedTab == .pomodoro {
+                        PomodoroTimerView(viewModel: viewModel)
+                            .padding()
+                    } else if selectedTab == .countdown {
+                        VStack(spacing: 28) {
+                            // YKS'ye kalan süre
+                            YKSCountdownView(examDate: examDate)
+                                .padding(.top, 8)
+                            // Kullanıcı geri sayım listesi
+                            VStack(spacing: 20) {
+                                if viewModel.countdownTimers.isEmpty {
+                                    VStack(spacing: 15) {
+                                        Image(systemName: "hourglass")
+                                            .font(.system(size: 40))
+                                            .foregroundColor(.secondary)
+                                        Text("Henüz geri sayım eklenmemiş")
+                                            .font(.headline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .padding(.vertical, 100)
+                                } else {
+                                    ForEach(viewModel.countdownTimers) { timer in
+                                        CountdownListItem(timer: timer) {
+                                            if let idx = viewModel.countdownTimers.firstIndex(where: { $0.id == timer.id }) {
+                                                viewModel.deleteCountdownTimer(at: IndexSet([idx]))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                }
+                // Floating + button for Pomodoro
+                if selectedTab == .pomodoro {
+                    Button(action: { showingAddPomodoro = true }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Circle().fill(Color.blue))
+                            .shadow(color: Color.blue.opacity(0.25), radius: 6, x: 0, y: 4)
+                    }
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 24)
+                    .transition(.scale)
+                }
+                // Floating + button for Sayaç
+                if selectedTab == .countdown {
+                    Button(action: { showingAddCountdown = true }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 56, height: 56)
+                            .background(Circle().fill(Color.blue))
+                            .shadow(color: Color.blue.opacity(0.25), radius: 6, x: 0, y: 4)
+                    }
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 24)
+                    .transition(.scale)
+                }
             }
-            .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
         }
         .navigationTitle("Sayaç")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    if selectedTab == 0 {
-                        showingAddPomodoro = true
-                    } else {
-                        showingAddCountdown = true
-                    }
-                }) {
-                    Label("Ekle", systemImage: "plus.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.blue)
-                }
-            }
+        .sheet(isPresented: $showingAddCountdown) {
+            AddCountdownView(viewModel: viewModel)
         }
         .sheet(isPresented: $showingAddPomodoro) {
             AddPomodoroView(viewModel: viewModel)
         }
-        .sheet(isPresented: $showingAddCountdown) {
-            AddCountdownView(viewModel: viewModel)
-        }
     }
 }
 
-// MARK: - Pomodoro Sekmesi
-struct PomodoroTabView: View {
-    @ObservedObject var viewModel: TimersViewModel
-    @Binding var showingAddPomodoro: Bool
+struct SegmentButton: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Pomodoro Seçici
-            if !viewModel.pomodoroTimers.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(viewModel.pomodoroTimers) { timer in
-                            PomodoroSelectionButton(
-                                timer: timer,
-                                isSelected: viewModel.selectedPomodoroTimer?.id == timer.id,
-                                onSelect: {
-                                    viewModel.selectPomodoroTimer(timer)
-                                }
-                            )
-                        }
-                    }
-                    .padding(.vertical, 10)
-                    .background(Color(UIColor.secondarySystemBackground))
-                }
-            }
-            
-            // Ana Pomodoro Görünümü
-            PomodoroTimerView(viewModel: viewModel)
-            
-            // Yeni Pomodoro Ekleme Butonu
-            Button(action: {
-                self.showingAddPomodoro = true
-            }) {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                    
-                    Text("Yeni Pomodoro Ekle")
-                        .fontWeight(.medium)
-                        .foregroundColor(.blue)
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.blue, lineWidth: 1)
-                        .background(Color.blue.opacity(0.05))
-                )
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-            }
-            
-            // Pomodoro Listesi
-            if !viewModel.pomodoroTimers.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Pomodoro Zamanlayıcıları")
-                        .font(.headline)
-                        .padding()
-                    
-                    List {
-                        ForEach(viewModel.pomodoroTimers) { timer in
-                            PomodoroListItem(
-                                timer: timer, 
-                                isSelected: viewModel.selectedPomodoroTimer?.id == timer.id,
-                                onSelect: { viewModel.selectPomodoroTimer(timer) },
-                                onDelete: { viewModel.deletePomodoroTimer(at: IndexSet([viewModel.pomodoroTimers.firstIndex(where: { $0.id == timer.id }) ?? 0])) }
-                            )
-                            .padding(.vertical, 5)
-                        }
-                        .onDelete { indexSet in
-                            viewModel.deletePomodoroTimer(at: indexSet)
-                        }
-                    }
-                    .listStyle(PlainListStyle())
-                }
-            }
-            
-            // Pomodoro İstatistikleri
-            NavigationLink(destination: PomodoroStatsView(viewModel: viewModel)) {
-                Text("Pomodoro İstatistikleri")
-                    .font(.headline)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.blue, lineWidth: 1)
-                            .background(Color.blue.opacity(0.05))
-                    )
-                    .padding(.horizontal)
-                    .padding(.vertical, 10)
-            }
+        Button(action: action) {
+            Text(title)
+                .fontWeight(isSelected ? .bold : .regular)
+                .foregroundColor(isSelected ? .white : .blue)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 14)
+                .background(isSelected ? Color.blue : Color.clear)
+                .cornerRadius(8)
         }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
-// MARK: - Geri Sayım Sekmesi
-struct CountdownTabView: View {
+struct CountdownScreen: View {
     @ObservedObject var viewModel: TimersViewModel
-    @Binding var showingAddCountdown: Bool
-    
     var body: some View {
-        VStack(spacing: 0) {
-            // YKS Geri Sayımı
-            YKSCountdownView(examDate: viewModel.yksExamDate)
-                .padding()
-                .background(Color(UIColor.secondarySystemBackground))
-                
-            // Yeni Geri Sayım Ekleme Butonu
-            Button(action: {
-                self.showingAddCountdown = true
-            }) {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                    
-                    Text("Yeni Geri Sayım Ekle")
-                        .fontWeight(.medium)
-                        .foregroundColor(.blue)
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.blue, lineWidth: 1)
-                        .background(Color.blue.opacity(0.05))
-                )
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-            }
-            
-            // Geri Sayım Listesi
+        VStack(spacing: 20) {
             if viewModel.countdownTimers.isEmpty {
                 VStack(spacing: 15) {
                     Image(systemName: "hourglass")
                         .font(.system(size: 40))
                         .foregroundColor(.secondary)
-                    
                     Text("Henüz geri sayım eklenmemiş")
                         .font(.headline)
                         .foregroundColor(.secondary)
-                    
-                    Text("Yeni bir geri sayım eklemek için sağ üstteki + butonuna tıklayın")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.vertical, 100)
             } else {
-                List {
-                    ForEach(viewModel.countdownTimers) { timer in
-                        CountdownListItem(
-                            timer: timer,
-                            onDelete: { viewModel.deleteCountdownTimer(at: IndexSet([viewModel.countdownTimers.firstIndex(where: { $0.id == timer.id }) ?? 0])) }
-                        )
+                ForEach(viewModel.countdownTimers) { timer in
+                    CountdownCard(timer: timer) {
+                        if let idx = viewModel.countdownTimers.firstIndex(where: { $0.id == timer.id }) {
+                            viewModel.deleteCountdownTimer(at: IndexSet([idx]))
+                        }
                     }
                 }
-                .listStyle(PlainListStyle())
             }
         }
+    }
+}
+
+struct CountdownCard: View {
+    let timer: CountdownTimer
+    let onDelete: () -> Void
+    var timeRemaining: TimeInterval {
+        max(0, timer.targetDate.timeIntervalSince(Date()))
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(timer.name)
+                    .font(.headline)
+                Spacer()
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
+                }
+            }
+            HStack(alignment: .firstTextBaseline) {
+                Text(formatTimeInterval(timeRemaining))
+                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+                    .foregroundColor(timer.color)
+                Spacer()
+                Text(formatDate(timer.targetDate))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            ProgressView(value: 1 - (timeRemaining / timer.targetDate.timeIntervalSince(timer.createdAt)), total: 1.0)
+                .progressViewStyle(LinearProgressViewStyle(tint: timer.color))
+        }
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(12)
+    }
+    private func formatTimeInterval(_ interval: TimeInterval) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.day, .hour, .minute, .second]
+        formatter.unitsStyle = .positional
+        formatter.zeroFormattingBehavior = .pad
+        return formatter.string(from: interval) ?? "00:00:00"
+    }
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 
@@ -226,17 +207,6 @@ struct CountdownTabView: View {
 struct PomodoroTimerView: View {
     @ObservedObject var viewModel: TimersViewModel
     @State private var showingStats = false
-    
-    var phaseColor: Color {
-        switch viewModel.currentPhase {
-        case .work:
-            return .blue
-        case .break:
-            return .green
-        case .longBreak:
-            return .purple
-        }
-    }
     
     var body: some View {
         VStack(spacing: 20) {
@@ -280,7 +250,7 @@ struct PomodoroTimerView: View {
             // Faz Bilgisi
             Text(viewModel.currentPhaseText)
                 .font(.headline)
-                .foregroundColor(phaseColor)
+                .foregroundColor(.blue)
             
             // Seans ve faz göstergesi
             if let selectedTimer = viewModel.selectedPomodoroTimer {
@@ -302,31 +272,72 @@ struct PomodoroTimerView: View {
             
             // Zamanlayıcı
             ZStack {
+                // Blue-cyan radial gradient background circle
                 Circle()
-                    .stroke(lineWidth: 15)
-                    .opacity(0.3)
-                    .foregroundColor(phaseColor)
-                
+                    .fill(
+                        RadialGradient(
+                            gradient: Gradient(colors: [Color.blue.opacity(0.38), Color.cyan.opacity(0.26)]),
+                            center: .center,
+                            startRadius: 10,
+                            endRadius: 110
+                        )
+                    )
+                    .frame(width: 220, height: 220)
+                    .shadow(color: Color.blue.opacity(0.13), radius: 16, x: 0, y: 2)
+
+                // Vibrant progress ring (blue-cyan)
                 Circle()
-                    .trim(from: 0.0, to: viewModel.progressValue)
-                    .stroke(style: StrokeStyle(lineWidth: 15, lineCap: .round, lineJoin: .round))
-                    .foregroundColor(phaseColor)
-                    .rotationEffect(Angle(degrees: 270.0))
-                    .animation(.linear, value: viewModel.progressValue)
-                
-                VStack(spacing: 5) {
+                    .trim(from: 0, to: viewModel.progressValue)
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [Color.blue, Color.cyan, Color.blue]),
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 18, lineCap: .round)
+                    )
+                    .rotationEffect(Angle.degrees(-90))
+                    .frame(width: 220, height: 220)
+                    .shadow(color: Color.blue.opacity(0.15), radius: 8, x: 0, y: 0)
+                    .animation(Animation.easeInOut, value: viewModel.progressValue)
+
+                VStack(spacing: 8) {
+                    // Timer text, large, bold, blue-cyan gradient
                     Text(viewModel.formattedTimeRemaining)
-                        .font(.system(size: 44, weight: .bold, design: .rounded))
-                    
+                        .font(.system(size: 54, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.blue, Color.cyan],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
+                        .frame(width: 170, alignment: .center)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    // Phase label, small, colored
+                    let phaseColor: Color = {
+                        switch viewModel.currentPhase {
+                        case .work: return .blue
+                        case .break: return .orange
+                        case .longBreak: return .purple
+                        }
+                    }()
                     if viewModel.currentPomodoroState == .paused {
                         Text("Duraklatıldı")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(phaseColor)
+                            .shadow(color: .black.opacity(0.10), radius: 1, x: 0, y: 1)
+                    } else {
+                        Text(viewModel.currentPhaseText)
+                            .font(.caption)
+                            .foregroundColor(phaseColor)
+                            .shadow(color: .black.opacity(0.10), radius: 1, x: 0, y: 1)
                     }
                 }
             }
-            .frame(width: 250, height: 250)
-            
+            .frame(width: 220, height: 220)
+
             // Kontrol Butonları
             HStack(spacing: 30) {
                 Button(action: {
@@ -532,17 +543,19 @@ struct PomodoroTimerView: View {
                         
                         // Çalışma düzeni gösterimi
                         HStack(spacing: 5) {
-                            ForEach(0..<min(selectedTimer.sessionsBeforeLongBreak, 8), id: \.self) { session in
-                                HStack(spacing: 2) {
-                                    RoundedRectangle(cornerRadius: 3)
+                            ForEach(0..<min(selectedTimer.sessionsBeforeLongBreak, 8), id: \.self) { day in
+                                let height = min(150, max(30, Double(day * 20 + 30)))
+                                
+                                VStack {
+                                    Rectangle()
                                         .fill(Color.blue)
-                                        .frame(width: 15, height: 10)
+                                        .frame(width: 15, height: height)
                                     
                                     RoundedRectangle(cornerRadius: 3)
                                         .fill(Color.green)
                                         .frame(width: 8, height: 10)
                                     
-                                    if session == selectedTimer.sessionsBeforeLongBreak - 1 {
+                                    if day == selectedTimer.sessionsBeforeLongBreak - 1 {
                                         RoundedRectangle(cornerRadius: 3)
                                             .fill(Color.purple)
                                             .frame(width: 12, height: 10)
@@ -581,18 +594,6 @@ struct PomodoroTimerView: View {
             }
         }
     }
-    
-    //    var phaseColor: Color {
-    //        switch viewModel.currentPhase {
-    //        case .work:
-    //            return .blue
-    //        case .break:
-    //            return .green
-    //        case .longBreak:
-    //            return .purple
-    //        }
-    //    }
-    //}
     
     // MARK: - Pomodoro İstatistikleri Görünümü
     struct PomodoroStatsView: View {
@@ -705,411 +706,5 @@ struct PomodoroTimerView: View {
             "Çalışma sırasında telefonunuzu sessiz moda alın.",
             "Günde en az 2 pomodoro seansı tamamlamayı hedefleyin."
         ]
-    }
-    
-    
-    
-    // MARK: - YKS Geri Sayım Görünümü
-    struct YKSCountdownView: View {
-        let examDate: Date
-        @State private var currentDate = Date()
-        
-        let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-        
-        var body: some View {
-            VStack(spacing: 15) {
-                Text("YKS Sınavına Kalan Süre")
-                    .font(.headline)
-                
-                HStack(spacing: 15) {
-                    CountdownBlock(value: daysRemaining, unit: "Gün")
-                    CountdownBlock(value: hoursRemaining, unit: "Saat")
-                    CountdownBlock(value: minutesRemaining, unit: "Dakika")
-                    CountdownBlock(value: secondsRemaining, unit: "Saniye")
-                }
-                
-                // Sınav tarihi
-                Text(formatExamDate())
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.top, 5)
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 15)
-                    .fill(Color.blue.opacity(0.1))
-            )
-            .onReceive(timer) { _ in
-                self.currentDate = Date()
-            }
-        }
-        
-        private func formatExamDate() -> String {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .long
-            formatter.timeStyle = .short
-            formatter.locale = Locale(identifier: "tr_TR")
-            return formatter.string(from: examDate)
-        }
-        
-        private var timeRemaining: TimeInterval {
-            return max(0, examDate.timeIntervalSince(currentDate))
-        }
-        
-        private var daysRemaining: Int {
-            return Int(timeRemaining) / 86400
-        }
-        
-        private var hoursRemaining: Int {
-            return (Int(timeRemaining) % 86400) / 3600
-        }
-        
-        private var minutesRemaining: Int {
-            return (Int(timeRemaining) % 3600) / 60
-        }
-        
-        private var secondsRemaining: Int {
-            return Int(timeRemaining) % 60
-        }
-    }
-    
-    // MARK: - Yardımcı Görünümler
-    struct CountdownBlock: View {
-        let value: Int
-        let unit: String
-        
-        var body: some View {
-            VStack {
-                Text("\(value)")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(.blue)
-                    .frame(minWidth: 40)
-                
-                Text(unit)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .frame(minWidth: 60)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(UIColor.systemBackground))
-            )
-        }
-    }
-    
-    struct PomodoroSelectionButton: View {
-        let timer: PomodoroTimer
-        let isSelected: Bool
-        let onSelect: () -> Void
-        
-        var body: some View {
-            Button(action: onSelect) {
-                VStack(spacing: 5) {
-                    Text(timer.name)
-                        .font(.subheadline)
-                        .fontWeight(isSelected ? .bold : .regular)
-                        .foregroundColor(isSelected ? .white : .primary)
-                    
-                    Text("\(Int(timer.workDuration / 60)) dk")
-                        .font(.caption)
-                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isSelected ? Color.blue : Color(UIColor.tertiarySystemBackground))
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
-    }
-    
-    struct PomodoroListItem: View {
-        let timer: PomodoroTimer
-        let isSelected: Bool
-        let onSelect: () -> Void
-        let onDelete: () -> Void
-        
-        var body: some View {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(timer.name)
-                        .font(.headline)
-                        .foregroundColor(isSelected ? .blue : .primary)
-                    
-                    HStack(spacing: 15) {
-                        Label("\(Int(timer.workDuration / 60)) dk çalışma", systemImage: "clock")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Label("\(Int(timer.breakDuration / 60)) dk mola", systemImage: "cup.and.saucer")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Spacer()
-                
-                Button(action: onSelect) {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? .blue : .gray)
-                        .font(.title3)
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
-                        .font(.title3)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? Color.blue.opacity(0.1) : Color(UIColor.secondarySystemBackground))
-            )
-        }
-    }
-    
-    struct CountdownListItem: View {
-        let timer: CountdownTimer
-        let onDelete: () -> Void
-        
-        var timeRemaining: TimeInterval {
-            return max(0, timer.targetDate.timeIntervalSince(Date()))
-        }
-        
-        var color: Color {
-            return timer.color
-        }
-        
-        var body: some View {
-            HStack {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(timer.name)
-                        .font(.headline)
-                        .foregroundColor(color)
-                    
-                    Text(formatTimeRemaining())
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    Text(formatDate())
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
-                        .font(.title3)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(color.opacity(0.1))
-            )
-        }
-        
-        private func formatTimeRemaining() -> String {
-            let formatter = DateComponentsFormatter()
-            formatter.allowedUnits = [.day, .hour, .minute]
-            formatter.unitsStyle = .short
-            
-            let result = formatter.string(from: timeRemaining) ?? "0 dakika"
-            
-            return result
-                .replacingOccurrences(of: "d", with: " gün")
-                .replacingOccurrences(of: "h", with: " saat")
-                .replacingOccurrences(of: "m", with: " dakika")
-        }
-        
-        private func formatDate() -> String {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            formatter.locale = Locale(identifier: "tr_TR")
-            return formatter.string(from: timer.targetDate)
-        }
-    }
-    
-    // MARK: - Yeni Pomodoro Ekleme Görünümü
-    struct AddPomodoroView: View {
-        @ObservedObject var viewModel: TimersViewModel
-        @Environment(\.presentationMode) var presentationMode
-        
-        @State private var name = "Yeni Pomodoro"
-        @State private var workMinutes: Double = 25
-        @State private var breakMinutes: Double = 5
-        @State private var longBreakMinutes: Double = 15
-        @State private var sessionsBeforeLongBreak: Double = 4
-        
-        var body: some View {
-            NavigationView {
-                Form {
-                    Section(header: Text("Pomodoro Bilgileri")) {
-                        TextField("Pomodoro Adı", text: $name)
-                    }
-                    
-                    Section(header: Text("Çalışma Süresi")) {
-                        VStack {
-                            HStack {
-                                Text("\(Int(workMinutes)) dakika")
-                                    .font(.headline)
-                                Spacer()
-                            }
-                            
-                            Slider(value: $workMinutes, in: 5...60, step: 5)
-                        }
-                    }
-                    
-                    Section(header: Text("Kısa Mola Süresi")) {
-                        VStack {
-                            HStack {
-                                Text("\(Int(breakMinutes)) dakika")
-                                    .font(.headline)
-                                Spacer()
-                            }
-                            
-                            Slider(value: $breakMinutes, in: 1...30, step: 1)
-                        }
-                    }
-                    
-                    Section(header: Text("Uzun Mola Süresi")) {
-                        VStack {
-                            HStack {
-                                Text("\(Int(longBreakMinutes)) dakika")
-                                    .font(.headline)
-                                Spacer()
-                            }
-                            
-                            Slider(value: $longBreakMinutes, in: 5...45, step: 5)
-                        }
-                    }
-                    
-                    Section(header: Text("Uzun Mola Öncesi Seans Sayısı")) {
-                        VStack {
-                            HStack {
-                                Text("\(Int(sessionsBeforeLongBreak)) seans")
-                                    .font(.headline)
-                                Spacer()
-                            }
-                            
-                            Slider(value: $sessionsBeforeLongBreak, in: 2...8, step: 1)
-                        }
-                        
-                        HStack(spacing: 10) {
-                            ForEach(1...8, id: \.self) { sessions in
-                                Text("\(sessions)")
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Int(sessionsBeforeLongBreak) == sessions ? Color.orange : Color.gray.opacity(0.2))
-                                    )
-                                    .foregroundColor(Int(sessionsBeforeLongBreak) == sessions ? .white : .primary)
-                            }
-                        }
-                        .padding(.vertical, 5)
-                    }
-                }
-                .navigationTitle("Yeni Pomodoro")
-                .navigationBarItems(
-                    leading: Button("İptal") {
-                        presentationMode.wrappedValue.dismiss()
-                    },
-                    trailing: Button("Kaydet") {
-                        viewModel.addPomodoroTimer(
-                            name: name,
-                            workDuration: workMinutes * 60,
-                            breakDuration: breakMinutes * 60,
-                            longBreakDuration: longBreakMinutes * 60,
-                            sessionsBeforeLongBreak: Int(sessionsBeforeLongBreak)
-                        )
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                )
-            }
-        }
-    }
-    
-    // MARK: - Yeni Geri Sayım Ekleme Görünümü
-    struct AddCountdownView: View {
-        @ObservedObject var viewModel: TimersViewModel
-        @Environment(\.presentationMode) var presentationMode
-        
-        @State private var name = "Yeni Geri Sayım"
-        @State private var targetDate = Date().addingTimeInterval(86400) // 1 gün sonra
-        @State private var selectedColor: Color = .blue
-        
-        let colorOptions: [(Color, String)] = [
-            (.blue, "Mavi"),
-            (.green, "Yeşil"),
-            (.red, "Kırmızı"),
-            (.orange, "Turuncu"),
-            (.purple, "Mor"),
-            (.pink, "Pembe")
-        ]
-        
-        var body: some View {
-            NavigationView {
-                Form {
-                    Section(header: Text("Geri Sayım Bilgileri")) {
-                        TextField("İsim", text: $name)
-                        
-                        DatePicker("Hedef Tarih", selection: $targetDate, displayedComponents: [.date, .hourAndMinute])
-                    }
-                    
-                    Section(header: Text("Renk")) {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 15) {
-                                ForEach(colorOptions, id: \.0) { color, name in
-                                    Circle()
-                                        .fill(color)
-                                        .frame(width: 30, height: 30)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(Color.primary, lineWidth: selectedColor == color ? 2 : 0)
-                                                .padding(2)
-                                        )
-                                        .onTapGesture {
-                                            selectedColor = color
-                                        }
-                                }
-                            }
-                            .padding(.vertical, 5)
-                        }
-                    }
-                }
-                .navigationTitle("Yeni Geri Sayım")
-                .navigationBarItems(
-                    leading: Button("İptal") {
-                        presentationMode.wrappedValue.dismiss()
-                    },
-                    trailing: Button("Kaydet") {
-                        viewModel.addCountdownTimer(
-                            name: name,
-                            targetDate: targetDate,
-                            color: selectedColor
-                        )
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                )
-            }
-        }
-    }
-    
-    #Preview {
-        NavigationView {
-            TimersView(viewModel: TimersViewModel())
-        }
     }
 }

@@ -9,6 +9,7 @@ class SettingsViewModel: BaseViewModelImpl {
     @Published var userName: String = "Kullanıcı"
     @Published var userEmail: String = ""
     @Published var appVersion: String = "1.0.0"
+    @Published var profileImageData: Data? = nil
     
     private var cancellables = Set<AnyCancellable>()
     
@@ -40,6 +41,10 @@ class SettingsViewModel: BaseViewModelImpl {
                 self.dailyReminderTime = savedTime
             }
             
+            if let imageData = UserDefaults.standard.data(forKey: "profileImageData") {
+                self.profileImageData = imageData
+            }
+            
             self.isLoading = false
         }
     }
@@ -57,6 +62,11 @@ class SettingsViewModel: BaseViewModelImpl {
             UserDefaults.standard.set(self.userName, forKey: "userName")
             UserDefaults.standard.set(self.userEmail, forKey: "userEmail")
             UserDefaults.standard.set(self.dailyReminderTime, forKey: "dailyReminderTime")
+            if let data = self.profileImageData {
+                UserDefaults.standard.set(data, forKey: "profileImageData")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "profileImageData")
+            }
             
             // Apply dark mode setting
             self.applyDarkMode()
@@ -104,6 +114,16 @@ class SettingsViewModel: BaseViewModelImpl {
     
     func updateReminderTime(_ time: Date) {
         dailyReminderTime = time
+        saveSettings()
+    }
+    
+    func updateProfileImage(_ data: Data?) {
+        profileImageData = data
+        saveSettings()
+    }
+    
+    func clearProfileImage() {
+        profileImageData = nil
         saveSettings()
     }
 }

@@ -31,7 +31,7 @@ struct DrawerView: View {
             // Drawer Items
             ScrollView {
                 VStack(alignment: .leading, spacing: 5) {
-                    ForEach(DrawerItemType.allCases) { item in
+                    ForEach(DrawerItemType.allCases.filter { $0 != .settings }) { item in
                         DrawerItemView(
                             icon: item.icon,
                             title: item.rawValue,
@@ -62,6 +62,17 @@ struct DrawerView: View {
                     )
                     .onTapGesture {
                         showFullAchievements = true
+                    }
+
+                    // Settings hemen Rozetler'in altına
+                    DrawerItemView(
+                        icon: DrawerItemType.settings.icon,
+                        title: DrawerItemType.settings.rawValue,
+                        isSelected: viewModel.selectedItem == .settings,
+                        color: DrawerItemType.settings.color
+                    )
+                    .onTapGesture {
+                        viewModel.selectItem(.settings)
                     }
                 }
                 .padding(.horizontal)
